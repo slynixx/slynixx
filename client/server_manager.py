@@ -25,6 +25,25 @@ def server_dir():
     )
 
 
+def load_server_module():
+    """Load server/server.py (from sys._MEIPASS when frozen) so it can be
+    run inside this process."""
+    if "workbay_server" in sys.modules:
+        return sys.modules["workbay_server"]
+    directory = server_dir()
+    if directory not in sys.path:
+        sys.path.insert(0, directory)
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "workbay_server", os.path.join(directory, "server.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["workbay_server"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 class ServerManager:
     """Starts the local server if nothing is listening yet, and stops it
     (subprocess mode only) when the client exits."""
@@ -54,17 +73,7 @@ class ServerManager:
             return False
 
     def _start_in_process(self):
-        directory = server_dir()
-        if directory not in sys.path:
-            sys.path.insert(0, directory)
-        import importlib.util
-
-        spec = importlib.util.spec_from_file_location(
-            "workbay_server", os.path.join(directory, "server.py")
-        )
-        module = importlib.util.module_from_spec(spec)
-        sys.modules["workbay_server"] = module
-        spec.loader.exec_module(module)
+        module = load_server_module()
         self.httpd = module.run_in_thread(host="127.0.0.1", port=self.port)
 
     def _start_subprocess(self):

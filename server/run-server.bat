@@ -1,6 +1,10 @@
 @echo off
-rem Run the Workbay server on its own (for the PC that hosts a shared
-rem LAN database). Other PCs point their client at this PC's address.
+rem Run the Workbay server on its own FROM SOURCE (for the PC that hosts
+rem a shared LAN database). Other PCs point their client at this PC's
+rem address.
+rem
+rem If you have the built exe you do not need this file or Python at
+rem all: run "Workbay.exe --server" instead.
 setlocal
 cd /d "%~dp0"
 

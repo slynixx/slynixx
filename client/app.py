@@ -1,10 +1,15 @@
-"""Workbay client entry point.
+"""Workbay entry point -- the whole app lives in this one program/exe.
 
-Run with:  py -3 app.py     (or pythonw app.py for no console)
+Run with:  py -3 app.py               the workshop app (single-PC mode:
+                                      auto-starts a hidden local server
+                                      and stops it on close)
+           py -3 app.py --server      LAN host mode: runs only the shared
+                                      server with a small status window;
+                                      other PCs point their Workbay at
+                                      this PC's address
 
-Single-PC mode: auto-starts a hidden local server and stops it on close.
-LAN mode: point the client at another machine via the "Server address"
-link on the login screen; the setting persists in client_config.json.
+LAN clients: click the "Server:" link on the sign-in screen and enter the
+host PC's address; the setting persists in client_config.json.
 
 Errors are never silent: Tk callback exceptions and startup crashes show
 a dialog and are appended to error.log in the Workbay data folder.
@@ -220,28 +225,141 @@ def assets_dir():
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 
 
+def lan_addresses():
+    """Best-effort list of this PC's LAN IP addresses."""
+    import socket
+
+    addresses = []
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("10.255.255.255", 1))  # no traffic actually sent
+            addresses.append(probe.getsockname()[0])
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None,
+                                       socket.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith("127.") and ip not in addresses:
+                addresses.append(ip)
+    except OSError:
+        pass
+    return addresses
+
+
+def run_server_mode(port):
+    """LAN host mode: run only the shared server, with a small dark status
+    window (the exe is --windowed, so there is no console to print to)."""
+    import tkinter as tk
+
+    import server_manager
+    import theme
+    import widgets
+
+    module = server_manager.load_server_module()
+    try:
+        httpd = module.make_server("0.0.0.0", port)
+    except OSError as exc:
+        _startup_error_dialog(
+            f"Workbay server could not start on port {port}.\n\n{exc}\n\n"
+            "Is another Workbay (or its hidden server) already running "
+            "on this PC?"
+        )
+        raise SystemExit(1)
+    import threading
+
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+
+    root = tk.Tk()
+    root.title("Workbay Server")
+    root.configure(bg=theme.BG, padx=28, pady=24)
+    root.resizable(False, False)
+
+    tk.Label(
+        root, text="WORKBAY SERVER", bg=theme.BG, fg=theme.RUST,
+        font=theme.font(18, bold=True),
+    ).pack(anchor="w")
+    tk.Label(
+        root, text=f"Running \u2022 sharing this PC's job book on port {port}",
+        bg=theme.BG, fg=theme.TEAL, font=theme.font(11, bold=True),
+    ).pack(anchor="w", pady=(4, 12))
+
+    addresses = lan_addresses()
+    connect_lines = "\n".join(
+        f"    {ip}:{port}" for ip in addresses
+    ) or "    (no LAN address found -- check the network)"
+    tk.Label(
+        root,
+        text="Workshops on other PCs: open Workbay, click the\n"
+             "'Server:' link on the sign-in screen and enter:\n"
+             + connect_lines,
+        bg=theme.BG, fg=theme.FG, font=theme.font(10), justify="left",
+    ).pack(anchor="w")
+    tk.Label(
+        root, text=f"Database: {os.path.join(data_dir(), 'workbay.db')}",
+        bg=theme.BG, fg=theme.FG_FAINT, font=theme.font(9),
+    ).pack(anchor="w", pady=(10, 14))
+
+    def stop():
+        try:
+            httpd.shutdown()
+        except Exception:
+            pass
+        root.destroy()
+
+    widgets.RoundedButton(
+        root, "Stop server", command=stop, colour=theme.RED, bg=theme.BG,
+    ).pack(anchor="w")
+    root.protocol("WM_DELETE_WINDOW", stop)
+    root.mainloop()
+
+
+def _startup_error_dialog(message):
+    log_error(message)
+    try:
+        import tkinter as tk
+        from tkinter import messagebox
+
+        hidden = tk.Tk()
+        hidden.withdraw()
+        messagebox.showerror(APP_NAME, message)
+        hidden.destroy()
+    except Exception:
+        pass
+
+
 def main():
     enable_windows_dpi_awareness()
+    args = sys.argv[1:]
+    if "--server" in args:
+        port = 8642
+        for arg in args:
+            if arg.isdigit():
+                port = int(arg)
+        try:
+            run_server_mode(port)
+        except SystemExit:
+            raise
+        except Exception:
+            text = traceback.format_exc()
+            log_error(text)
+            _startup_error_dialog(
+                "Workbay server failed to start.\n\n"
+                f"{text.splitlines()[-1]}\n\n"
+                f"Full details in error.log in\n{data_dir()}"
+            )
+            raise SystemExit(1)
+        return
     try:
         app = WorkbayApp()
     except Exception:
         text = traceback.format_exc()
         log_error(text)
-        try:
-            import tkinter as tk
-            from tkinter import messagebox
-
-            hidden = tk.Tk()
-            hidden.withdraw()
-            messagebox.showerror(
-                APP_NAME,
-                "Workbay failed to start.\n\n"
-                f"{text.splitlines()[-1]}\n\n"
-                f"Full details in error.log in\n{data_dir()}",
-            )
-            hidden.destroy()
-        except Exception:
-            pass
+        _startup_error_dialog(
+            "Workbay failed to start.\n\n"
+            f"{text.splitlines()[-1]}\n\n"
+            f"Full details in error.log in\n{data_dir()}"
+        )
         raise SystemExit(1)
     app.run()
 

@@ -29,13 +29,18 @@ client\build-exe.bat      ->  client\dist\Workbay.exe
 ```
 
 The exe is `--onefile --windowed` (no console ever) and runs the bundled
-server in-process on a daemon thread.
+server in-process on a daemon thread. **Everything is this one exe** --
+the workshop app, the hidden local server, and LAN host mode.
 
-## LAN mode
+## LAN mode (still just the one exe)
 
-Run `server\run-server.bat` on the host PC, then on each workshop PC
-click the "Server:" link on the sign-in screen and enter
-`<host-ip>:8642`.
+On the host PC run `Workbay.exe --server` (make a shortcut with that
+argument). A small status window shows the address to use. On each
+workshop PC, open Workbay, click the "Server:" link on the sign-in
+screen and enter `<host-ip>:8642`.
+
+From source the equivalent is `py -3 app.py --server` (or
+`server\run-server.bat`).
 
 ## Layout
 
