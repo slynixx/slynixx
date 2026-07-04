@@ -8,7 +8,9 @@ rem   --add-data "..\server;server"  bundle the server so the exe can run
 rem                                  it in-process on a daemon thread
 rem   --paths "..\server"         let PyInstaller analyse server imports
 rem   hidden imports server_manager secrets sqlite3 hashlib db auth
-rem       (the bundled server fails with ModuleNotFoundError without them)
+rem       http.server socketserver
+rem       (the bundled server is loaded at runtime, so PyInstaller cannot
+rem        see its imports; it fails with ModuleNotFoundError without them)
 setlocal
 cd /d "%~dp0"
 
@@ -55,6 +57,8 @@ echo Building Workbay.exe ...
     --hidden-import hashlib ^
     --hidden-import db ^
     --hidden-import auth ^
+    --hidden-import http.server ^
+    --hidden-import socketserver ^
     app.py
 if errorlevel 1 (
     echo.
