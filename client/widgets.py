@@ -110,14 +110,48 @@ class TopBar(tk.Frame):
             self.on_tab(name)
 
 
+_SCROLL_STYLE_READY = False
+
+
+def _dark_scrollbar_style():
+    """One-time ttk style so scrollbars match the dark theme instead of
+    the glaring default grey."""
+    global _SCROLL_STYLE_READY
+    if _SCROLL_STYLE_READY:
+        return
+    from tkinter import ttk
+
+    style = ttk.Style()
+    try:
+        style.theme_use("clam")
+    except tk.TclError:
+        pass
+    style.configure(
+        "Workbay.Vertical.TScrollbar",
+        background=theme.BG_HOVER, troughcolor=theme.BG,
+        bordercolor=theme.BG, lightcolor=theme.BG_HOVER,
+        darkcolor=theme.BG_HOVER, arrowcolor=theme.FG_DIM,
+        relief="flat", gripcount=0,
+    )
+    style.map(
+        "Workbay.Vertical.TScrollbar",
+        background=[("active", theme.BORDER), ("pressed", theme.BORDER)],
+    )
+    _SCROLL_STYLE_READY = True
+
+
 class ScrollableFrame(tk.Frame):
     """Vertical scrolling container; put children in `.inner`."""
 
     def __init__(self, parent, bg=theme.BG):
         super().__init__(parent, bg=bg)
+        from tkinter import ttk
+
+        _dark_scrollbar_style()
         self.canvas = tk.Canvas(self, bg=bg, highlightthickness=0, bd=0)
-        self.scrollbar = tk.Scrollbar(
-            self, orient="vertical", command=self.canvas.yview
+        self.scrollbar = ttk.Scrollbar(
+            self, orient="vertical", command=self.canvas.yview,
+            style="Workbay.Vertical.TScrollbar",
         )
         self.inner = tk.Frame(self.canvas, bg=bg)
         self._window = self.canvas.create_window(
@@ -158,7 +192,7 @@ class ScrollableFrame(tk.Frame):
             self.bind_mousewheel_recursive(child)
 
 
-def toast(root, message, colour=theme.TEAL, ms=1800):
+def toast(root, message, colour=theme.TEAL, ms=2800):
     """Small transient notification at the bottom of the window."""
     note = tk.Label(
         root, text=message, bg=colour, fg="#ffffff",
@@ -181,21 +215,40 @@ def format_phone_digits(digits):
 
 def attach_phone_formatter(entry, var):
     """Live-format a phone entry as the user types: digits only, max 10,
-    spaced 000 000 0000."""
-    state = {"busy": False}
+    spaced 000 000 0000.
 
-    def on_change(*_args):
-        if state["busy"]:
-            return
-        state["busy"] = True
+    The rewrite is deferred with after_idle rather than done inside the
+    variable trace: mutating the entry mid-keystroke reorders queued key
+    events when input arrives quickly.
+    """
+    state = {"busy": False, "scheduled": False}
+
+    def reformat():
+        state["scheduled"] = False
         try:
-            digits = "".join(ch for ch in var.get() if ch.isdigit())
-            formatted = format_phone_digits(digits)
-            if formatted != var.get():
+            current = var.get()
+        except tk.TclError:
+            return  # widget destroyed
+        digits = "".join(ch for ch in current if ch.isdigit())
+        formatted = format_phone_digits(digits)
+        if formatted != current:
+            state["busy"] = True
+            try:
                 var.set(formatted)
                 entry.icursor("end")
-        finally:
-            state["busy"] = False
+            except tk.TclError:
+                pass
+            finally:
+                state["busy"] = False
+
+    def on_change(*_args):
+        if state["busy"] or state["scheduled"]:
+            return
+        state["scheduled"] = True
+        try:
+            entry.after_idle(reformat)
+        except tk.TclError:
+            state["scheduled"] = False
 
     var.trace_add("write", on_change)
 
@@ -206,7 +259,8 @@ def copy_to_clipboard(root, text):
     root.update_idletasks()
 
 
-def styled_entry(parent, textvariable=None, width=24, show=None, size=11):
+def styled_entry(parent, textvariable=None, width=24, show=None, size=11,
+                 select_on_focus=False):
     entry = tk.Entry(
         parent, textvariable=textvariable, width=width, show=show,
         bg=theme.BG_FIELD, fg=theme.FG, insertbackground=theme.FG,
@@ -214,6 +268,15 @@ def styled_entry(parent, textvariable=None, width=24, show=None, size=11):
         highlightthickness=1, highlightbackground=theme.BORDER,
         highlightcolor=theme.RUST,
     )
+    if select_on_focus:
+        # Numeric fields: select the current value on click/focus so
+        # typing replaces it instead of prepending to it.
+        def select_all(_event):
+            entry.after_idle(
+                lambda: (entry.select_range(0, "end"), entry.icursor("end"))
+            )
+
+        entry.bind("<FocusIn>", select_all)
     return entry
 
 

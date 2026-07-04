@@ -333,24 +333,40 @@ class VehiclePanel(tk.Frame):
 
     # -------------------------------------------------------------- parts
 
+    # Parts table columns: (heading, minimum px, stretch weight, anchor).
+    # Money columns are right-aligned so amounts line up on the decimal.
+    PART_COLUMNS = (
+        ("PART NO.", 72, 0, "w"),
+        ("NAME", 120, 3, "w"),
+        ("SUPPLIER", 90, 2, "w"),
+        ("COST", 86, 0, "e"),
+        ("DISC", 48, 0, "e"),
+        ("NET", 86, 0, "e"),
+        ("STATUS", 76, 0, "w"),
+        ("", 34, 0, "e"),   # edit
+        ("", 22, 0, "e"),   # delete
+    )
+
     def _render_parts(self, parent):
         card = self._card(parent, "PARTS")
         parts = self.vehicle.get("parts", [])
 
         if parts:
-            head = tk.Frame(card, bg=theme.BG_PANEL)
-            head.pack(fill="x")
-            for text, width in (
-                ("PART NO.", 10), ("NAME", 16), ("SUPPLIER", 12),
-                ("COST", 10), ("DISC", 6), ("NET", 10), ("STATUS", 9), ("", 8),
+            table = tk.Frame(card, bg=theme.BG_PANEL)
+            table.pack(fill="x")
+            for col, (heading, minsize, weight, anchor) in enumerate(
+                self.PART_COLUMNS
             ):
+                table.columnconfigure(col, minsize=minsize, weight=weight)
                 tk.Label(
-                    head, text=text, bg=theme.BG_PANEL, fg=theme.FG_FAINT,
-                    font=theme.font(8, bold=True), width=width, anchor="w",
-                ).pack(side="left")
-        for part in parts:
-            self._render_part_row(card, part)
-        if not parts:
+                    table, text=heading, bg=theme.BG_PANEL,
+                    fg=theme.FG_FAINT, font=theme.font(8, bold=True),
+                    anchor=anchor,
+                ).grid(row=0, column=col, sticky="ew",
+                       padx=(0, 8), pady=(0, 2))
+            for index, part in enumerate(parts):
+                self._render_part_row(table, part, index + 1)
+        else:
             tk.Label(
                 card, text="No parts yet.", bg=theme.BG_PANEL,
                 fg=theme.FG_FAINT, font=theme.font(10),
@@ -365,54 +381,53 @@ class VehiclePanel(tk.Frame):
                 padx=16, pady=6,
             ).pack(anchor="w", pady=(10, 2))
 
-    def _render_part_row(self, card, part):
+    def _render_part_row(self, table, part, grid_row):
         editing = (
             isinstance(self._editing_part, dict)
             and self._editing_part["id"] == part["id"]
         )
-        row = tk.Frame(card, bg=theme.BG_HOVER if editing else theme.BG_PANEL)
-        row.pack(fill="x", pady=1)
+        bg = theme.BG_HOVER if editing else theme.BG_PANEL
         net = theme.part_net_cents(part)
-        values = (
-            (part["part_number"], 10, theme.FG),
-            (part["name"], 16, theme.FG),
-            (part["supplier"], 12, theme.FG_DIM),
-            (theme.format_money(part["cost_cents"]), 10, theme.AMBER),
-            (
-                f"{part['discount_pct']:g}%" if part["discount_pct"] else "-",
-                6, theme.FG_DIM,
-            ),
-            (theme.format_money(net), 10, theme.AMBER),
+        cells = (
+            (part["part_number"], theme.FG, theme.font(10)),
+            (part["name"], theme.FG, theme.font(10)),
+            (part["supplier"], theme.FG_DIM, theme.font(10)),
+            (theme.format_money(part["cost_cents"]), theme.AMBER,
+             theme.font(10)),
+            (f"{part['discount_pct']:g}%" if part["discount_pct"] else "-",
+             theme.FG_DIM, theme.font(10)),
+            (theme.format_money(net), theme.AMBER, theme.font(10)),
         )
-        for text, width, colour in values:
+        for col, (text, colour, font) in enumerate(cells):
+            anchor = self.PART_COLUMNS[col][3]
             tk.Label(
-                row, text=text, bg=row.cget("bg"), fg=colour,
-                font=theme.font(10), width=width, anchor="w",
-            ).pack(side="left")
+                table, text=text, bg=bg, fg=colour, font=font,
+                anchor=anchor,
+            ).grid(row=grid_row, column=col, sticky="ew",
+                   padx=(0, 8), pady=1)
         status = tk.Label(
-            row, text=part["status"], bg=row.cget("bg"),
+            table, text=part["status"], bg=bg,
             fg=STATUS_COLOURS.get(part["status"], theme.FG),
-            font=theme.font(9, bold=True), width=9, anchor="w",
-            cursor="hand2",
+            font=theme.font(9, bold=True), anchor="w", cursor="hand2",
         )
-        status.pack(side="left")
+        status.grid(row=grid_row, column=6, sticky="ew", padx=(0, 8), pady=1)
         status.bind(
             "<Button-1>",
             lambda e, p=dict(part): self._advance_status(p),
         )
         edit = tk.Label(
-            row, text="edit", bg=row.cget("bg"), fg=theme.TEAL,
-            font=theme.font(9, bold=True), cursor="hand2", padx=4,
+            table, text="edit", bg=bg, fg=theme.TEAL,
+            font=theme.font(9, bold=True), cursor="hand2", anchor="e",
         )
-        edit.pack(side="left")
+        edit.grid(row=grid_row, column=7, sticky="ew", padx=(0, 8), pady=1)
         edit.bind(
             "<Button-1>", lambda e, p=dict(part): self._open_editor(p)
         )
         remove = tk.Label(
-            row, text="\u00d7", bg=row.cget("bg"), fg=theme.FG_FAINT,
-            font=theme.font(11, bold=True), cursor="hand2", padx=6,
+            table, text="\u00d7", bg=bg, fg=theme.FG_FAINT,
+            font=theme.font(11, bold=True), cursor="hand2", anchor="e",
         )
-        remove.pack(side="left")
+        remove.grid(row=grid_row, column=8, sticky="ew", pady=1)
         remove.bind(
             "<Button-1>", lambda e, i=part["id"]: self._delete_part(i)
         )
@@ -451,12 +466,12 @@ class VehiclePanel(tk.Frame):
                 value=(f"{part['cost_cents'] / 100:.2f}" if part else "")
             ),
             "discount": tk.StringVar(
-                value=(f"{part['discount_pct']:g}" if part else "0")
+                value=(f"{part['discount_pct']:g}" if part else "")
             ),
             "status": tk.StringVar(value=part["status"] if part else "Ordered"),
         }
 
-        def cell(row, col, label, key, width=14):
+        def cell(row, col, label, key, width=14, numeric=False):
             holder = tk.Frame(editor, bg=theme.BG_FIELD)
             holder.grid(row=row, column=col, sticky="w", padx=4, pady=2)
             tk.Label(
@@ -464,7 +479,8 @@ class VehiclePanel(tk.Frame):
                 font=theme.font(8, bold=True),
             ).pack(anchor="w")
             entry = widgets.styled_entry(
-                holder, self.part_vars[key], width=width
+                holder, self.part_vars[key], width=width,
+                select_on_focus=numeric,
             )
             entry.configure(bg=theme.BG_PANEL)
             entry.pack(ipady=3)
@@ -473,8 +489,8 @@ class VehiclePanel(tk.Frame):
         first = cell(1, 0, "PART NUMBER", "part_number")
         cell(1, 1, "NAME", "name", width=18)
         cell(1, 2, "SUPPLIER", "supplier")
-        cell(2, 0, "COST (RAND)", "cost")
-        cell(2, 1, "DISCOUNT %", "discount", width=8)
+        cell(2, 0, "COST (RAND)", "cost", numeric=True)
+        cell(2, 1, "DISCOUNT %", "discount", width=8, numeric=True)
 
         status_holder = tk.Frame(editor, bg=theme.BG_FIELD)
         status_holder.grid(row=2, column=2, sticky="w", padx=4)

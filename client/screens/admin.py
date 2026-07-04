@@ -118,9 +118,11 @@ class AdminScreen(tk.Frame):
             highlightthickness=1, highlightbackground=theme.BORDER,
         )
         row.pack(fill="x", pady=3)
+        # Fixed-width name column so the rate/vehicle info starts at the
+        # same x in every row.
         tk.Label(
             row, text=workshop["name"], bg=theme.BG_PANEL, fg=theme.FG,
-            font=theme.font(12, bold=True),
+            font=theme.font(12, bold=True), width=22, anchor="w",
         ).pack(side="left")
         rate = workshop.get("labour_rate_cents") or 0
         tk.Label(
@@ -301,9 +303,9 @@ class AdminScreen(tk.Frame):
         )
         row.pack(fill="x", pady=3)
         plate = tk.Label(
-            row, text=" " + vehicle["registration"] + " ", bg=theme.AMBER,
+            row, text=vehicle["registration"], bg=theme.AMBER,
             fg=theme.PLATE_TEXT, font=theme.plate_font(11), padx=6, pady=2,
-            cursor="hand2",
+            cursor="hand2", width=10, anchor="center",
         )
         plate.pack(side="left")
         plate.bind(
@@ -341,12 +343,13 @@ class AdminScreen(tk.Frame):
         tk.Label(
             row, text=theme.format_money(totals["total"]),
             bg=theme.BG_PANEL, fg=theme.AMBER, font=theme.font(11, bold=True),
+            width=11, anchor="e",
         ).pack(side="right", padx=12)
-        if vehicle.get("status") == "done":
-            tk.Label(
-                row, text="DONE", bg=theme.BG_PANEL, fg=theme.TEAL,
-                font=theme.font(9, bold=True),
-            ).pack(side="right")
+        tk.Label(
+            row, text="DONE" if vehicle.get("status") == "done" else "",
+            bg=theme.BG_PANEL, fg=theme.TEAL,
+            font=theme.font(9, bold=True), width=5, anchor="e",
+        ).pack(side="right")
 
         open_vehicle = lambda e, i=vehicle["id"]: self._open_vehicle(i)
         for widget in (row, mid, line, sub):

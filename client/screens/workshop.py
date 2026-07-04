@@ -137,10 +137,12 @@ class WorkshopScreen(tk.Frame):
         )
         row.pack(fill="x", pady=3)
 
+        # Fixed-width plate so the text column starts at the same x in
+        # every row regardless of registration length.
         plate = tk.Label(
-            row, text=" " + vehicle["registration"] + " ", bg=theme.AMBER,
+            row, text=vehicle["registration"], bg=theme.AMBER,
             fg=theme.PLATE_TEXT, font=theme.plate_font(11), padx=6, pady=2,
-            cursor="hand2",
+            cursor="hand2", width=10, anchor="center",
         )
         plate.pack(side="left")
         plate.bind(
@@ -181,9 +183,11 @@ class WorkshopScreen(tk.Frame):
         status_bits = f"items {done_text}   parts {vehicle['part_count']}"
         if vehicle.get("status") == "done":
             status_bits += "   DONE"
+        # Fixed-width right-aligned trailing columns so the totals and
+        # counters line up down the list.
         tk.Label(
             row, text=status_bits, bg=theme.BG_PANEL, fg=badge_colour,
-            font=theme.font(9, bold=True),
+            font=theme.font(9, bold=True), width=24, anchor="e",
         ).pack(side="right")
 
         totals = theme.vehicle_totals(
@@ -194,6 +198,7 @@ class WorkshopScreen(tk.Frame):
         tk.Label(
             row, text=theme.format_money(totals["total"]), bg=theme.BG_PANEL,
             fg=theme.AMBER, font=theme.font(11, bold=True),
+            width=11, anchor="e",
         ).pack(side="right", padx=12)
 
         open_vehicle = lambda e, i=vehicle["id"]: self._open_vehicle(i)
